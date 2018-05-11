@@ -1,0 +1,97 @@
+
+package petri.siments;
+import petri.*;
+import petri.events.*;
+
+public class Experimenter extends SimEnt {
+
+    // the experimenter 
+
+    // where this worm lives
+    private Env _env;
+    private boolean _virgin = true;
+
+    private static final boolean DIAG = Param.Experimenter_DIAG;
+    protected boolean diagOn() { return Experimenter.DIAG; }
+
+    private double _pih, _pim, _pdh;
+    private double _lastpih, _lastpim, _lastpdh;
+    private double _pihThreshold, _pimThreshold, _pdhThreshold;
+
+    public Experimenter(Env env, double period) {
+	super("Experimenter");
+	_env = env;
+       	TimeTick tt = new TimeTick(period);
+	this.send(this, tt, tt.getPeriod());	
+    }
+
+    public void recv(SimEnt src, Event ev) {
+
+	// dispatch!
+	if (ev instanceof Kill) {
+	    this.suicide();
+	    Scheduler.instance().stop();
+	}
+	else if (ev instanceof TimeTick) {
+	    TimeTick tt = (TimeTick)ev;
+
+	    if (_virgin) {
+		System.out.println("# time \t %mach-inf \t %hp-inf \t % hp-diag");
+		_virgin = false;
+		_lastpim = _pim = _env.percentageInfected_Machines();
+		_lastpih = _pih = _env.percentageInfected_Machines();
+		_lastpdh = _pdh = _env.percentageDiagnosed_Honeypots();
+	    }
+	    else {
+		_pim = _env.percentageInfected_Machines();
+		_pih = _env.percentageInfected_Honeypots();
+		_pdh = _env.percentageDiagnosed_Honeypots();
+
+		_lastpim = _pim;
+		_lastpih = _pih;
+		_lastpdh = _pdh;
+	    }
+
+	    double time = Scheduler.instance().getTime();
+	    // determine stats
+
+	    if ((_lastpih < 50.0) && (_pih > 50.0)) {
+		_pihThreshold = time;
+	    }
+	    if ((_lastpim < 50.0) && (_pim > 50.0)) {
+		_pimThreshold = time;
+	    }
+	    if ((_lastpdh < 50.0) && (_pdh > 50.0)) {
+		_pdhThreshold = time;
+	    }
+
+	    if (diagOn()) {
+		System.out.println(""+time+
+				   "\t"+_pim+
+				   "\t"+_pih+
+				   "\t"+_pdh);
+	    }
+
+	    if (_pdh == 1.0) {
+		this.send(this, new Kill(), 0);
+
+		System.out.println(+_pimThreshold+
+				   "\t"+_pihThreshold+
+				   "\t"+_pdhThreshold);
+	    }
+
+	    // register next tick
+	    this.send(this, tt, tt.getPeriod());
+	}
+
+    }
+
+    public void deliveryAck(Scheduler.EventHandle h) {
+	//no-op
+    }
+
+    protected void suicide() {
+	_env = null;
+	super.suicide();
+    }
+}
